@@ -1,0 +1,13 @@
+workspace_metadata:
+  id: "Library "
+  name: "Knowledge Assistant"
+  description: "Workspace điều phối đa nhiệm cho doanh nghiệp"
+skills:
+  - id: "opnsense "
+    path: "./skills/opnsense"
+    priority: 1
+  - id: "crowdsec"
+    path: "./skills/crowdsec"
+    priority: 2
+
+routing_strategy: "intent_based" # Hoặc "sequential"

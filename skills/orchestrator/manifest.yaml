@@ -1,0 +1,20 @@
+skill_id: "orchestrator"
+version: "1.0.0"
+priority: 0 # Luôn ưu tiên kiểm tra trước các skill chuyên biệt
+
+# Các từ khóa trigger đa domain (như bạn đã định nghĩa)
+capabilities:
+  - "bảo vệ Zimbra với CrowdSec"
+  - "hardening mail server toàn diện"
+  - "security stack VNPT"
+  - "tích hợp WAF và IDS"
+  - "pipeline bảo mật nhiều lớp"
+
+knowledge_base:
+  source_directory: "./references"
+  
+# Quyền hạn đặc biệt: Skill này được phép "nhìn" vào tài liệu của các skill khác
+context_permissions:
+  scopes:
+    - "read:skills/*" 
+    - "write:final_report"

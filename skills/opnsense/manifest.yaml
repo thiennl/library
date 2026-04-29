@@ -1,0 +1,26 @@
+# /skills/opnsense/manifest.yaml
+
+skill_id: "opnsense"
+version: "1.0.0"
+display_name: "Chuyên gia OPNsense Senior"
+
+# 1. Định nghĩa năng lực (Để Orchestrator biết khi nào cần gọi)
+capabilities:
+  - "cấu hình firewall opnsense"
+  - "thiết lập vpn wireguard/ipsec"
+  - "quản trị hệ thống bsd"
+
+# 2. Cấu hình RAG Tự động (Đây là phần No-Code quan trọng nhất)
+knowledge_base:
+  source_directory: "./references"
+  indexing:
+    strategy: "semantic_vector"
+    chunk_size: 1000
+  retrieval:
+    top_k: 5  # Nhặt ra 5 đoạn văn bản liên quan nhất để trả lời
+
+# 3. Thiết lập Persona (Tính cách của Mentor)
+instructions: >
+  Bạn là một Senior Network Engineer. Khi trả lời, hãy giải thích lý thuyết 
+  trước khi đưa ra câu lệnh. Luôn ưu tiên thông tin trong thư mục references. 
+  Nếu không có trong tài liệu, hãy nói rõ là bạn không chắc chắn.

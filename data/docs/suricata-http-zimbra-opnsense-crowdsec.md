@@ -168,30 +168,54 @@ Rules filter:
 
 ### 1.5 Bật HTTP Logging trong EVE JSON
 
-CrowdSec cần đọc EVE JSON đầy đủ. Tạo file override config:
+Cấu hình EVE JSON logging gồm 2 bước: **GUI** cho phần chuẩn, **SSH** cho phần XFF.
+
+#### Bước A — Cấu hình qua GUI
+
+`Services → Intrusion Detection → Administration → Logging Settings`
+
+```
+[✓] Enable syslog alerts
+[✓] Enable eve syslog output
+[✓] Enable eve HTTP logging          ← bật HTTP logging vào EVE JSON
+[✓] Eve HTTP extended logging        ← log đầy đủ URI, method, status, referrer
+Eve HTTP dump all headers:  Request  ← log TẤT CẢ request headers (bao gồm X-Forwarded-For)
+[ ] Enable eve TLS logging           ← không cần (Suricata sniff LAN HTTP)
+```
+
+> **"Eve HTTP dump all headers → Request"** là bắt buộc trong kiến trúc này. Nếu để `None`, header `X-Forwarded-For` sẽ không xuất hiện trong EVE JSON → CrowdSec không đọc được IP thật attacker.
+
+Sau khi cấu hình GUI → **Save**.
+
+#### Bước B — Thêm XFF config qua SSH (không có trong GUI)
+
+GUI không có option cho XFF extraction. Cần tạo file riêng để Suricata extract XFF thành trường `http.xff` độc lập trong EVE JSON — đây là trường CrowdSec parser đọc để lấy IP thật:
 
 ```bash
 # SSH vào OPNsense
 mkdir -p /usr/local/etc/suricata/conf.d/
 
-cat > /usr/local/etc/suricata/conf.d/http-logging.yaml << 'EOF'
-outputs:
-  - eve-log:
-      enabled: yes
-      filetype: regular
-      filename: eve.json
-      community-id: yes
-      types:
-        - alert:
-            tagged-packets: yes
-        - http:
-            extended: yes
-        - dns
-        - tls:
-            extended: yes
-        - flow
+cat > /usr/local/etc/suricata/conf.d/xff.yaml << 'EOF'
+app-layer:
+  protocols:
+    http:
+      xff:
+        enabled: yes
+        mode: extra-data     # tạo trường http.xff riêng trong EVE JSON
+        deployment: reverse  # HAProxy là reverse proxy đứng trước
+        header: X-Forwarded-For
 EOF
 ```
+
+**Sự khác nhau giữa GUI "dump all headers" và SSH xff config:**
+
+| | GUI: dump all headers = Request | SSH: xff config |
+|---|---|---|
+| Tác dụng | Ghi XFF vào `request_headers[]` array | Ghi XFF vào trường `http.xff` riêng |
+| CrowdSec đọc được? | ⚠️ Phải parse array phức tạp | ✅ Đọc trực tiếp `http.xff` |
+| Dùng để | Debug thủ công, xem raw headers | CrowdSec tự động extract IP attacker |
+
+→ **Cần cả hai**: GUI để log đầy đủ headers, SSH để CrowdSec hoạt động đúng.
 
 ### 1.6 Apply và kiểm tra Suricata
 
@@ -205,11 +229,20 @@ Kiểm tra qua SSH:
 # Suricata đang chạy không?
 ps aux | grep suricata
 
-# EVE JSON đang được ghi không?
-tail -f /var/log/suricata/eve.json | head -20
+# EVE JSON có trường http.xff không? (sau khi có traffic HTTP)
+tail -f /var/log/suricata/eve.json | python3 -c "
+import sys, json
+for line in sys.stdin:
+    try:
+        e = json.loads(line)
+        if e.get('event_type') == 'http' and 'xff' in e.get('http', {}):
+            print('✅ XFF found:', e['http']['xff'])
+            break
+    except: pass
+"
 
 # Test config không có lỗi cú pháp
-suricata -T -c /usr/local/etc/suricata/suricata.yaml -v
+suricata -T -c /usr/local/etc/suricata/suricata.yaml -v 2>&1 | grep -E "error|warn|Loaded"
 ```
 
 ---
@@ -237,37 +270,27 @@ Suricata sniff tại LAN interface — sau HAProxy đã TLS termination — nên
 
 ### 2.2 Cấu hình Suricata đọc X-Forwarded-For
 
-Để Suricata ghi IP thật từ XFF vào EVE JSON (CrowdSec sẽ dùng), thêm vào file override:
+XFF config đã được thực hiện ở **Phần 1.5 Bước B** (`conf.d/xff.yaml`). Sau khi apply, EVE JSON sẽ có trường `http.xff` chứa IP thật của attacker:
 
-```bash
-cat >> /usr/local/etc/suricata/conf.d/http-logging.yaml << 'EOF'
-
-# Ghi X-Forwarded-For vào EVE JSON
-vars:
-  address-groups:
-    HTTP_SERVERS: "10.0.0.0/24"    # subnet LAN Zimbra — sửa theo thực tế
-
-app-layer:
-  protocols:
-    http:
-      enabled: yes
-      xff:
-        enabled: yes
-        mode: extra-data           # ghi XFF vào trường riêng trong EVE
-        deployment: reverse        # HAProxy là reverse proxy
-        header: X-Forwarded-For
-EOF
-```
-
-Sau khi cấu hình, EVE JSON sẽ có thêm trường:
 ```json
 {
   "src_ip": "10.0.0.1",
+  "dest_ip": "10.0.0.2",
   "http": {
-    "xff": "203.0.113.1"
+    "url": "/zimbra/",
+    "http_method": "POST",
+    "http_user_agent": "sqlmap/1.6",
+    "xff": "203.0.113.1",
+    "request_headers": [
+      {"name": "X-Forwarded-For", "value": "203.0.113.1"},
+      {"name": "X-Real-IP", "value": "203.0.113.1"}
+    ]
   }
 }
 ```
+
+**CrowdSec parser `crowdsecurity/suricata-logs` sẽ đọc `http.xff` và ghi vào `evt.Meta.source_ip`** — đây là IP được dùng để ban tại WAN firewall, không phải `src_ip` (IP HAProxy).
+
 
 ### 2.3 Hiểu HTTP endpoints của Zimbra
 
@@ -887,7 +910,7 @@ cscli metrics show acquisition
 /usr/local/etc/suricata/
 ├── suricata.yaml                    ← generated bởi OPNsense, KHÔNG sửa tay
 ├── conf.d/
-│   └── http-logging.yaml            ← EVE JSON logging + XFF config (Phần 1.5, 2.2)
+│   └── xff.yaml                     ← XFF extraction config (Phần 1.5B — SSH)
 ├── opnsense.rules/
 │   ├── OPNsense.rules               ← custom Zimbra rules (Phần 2.4)
 │   ├── et.emerging-web_server.rules
@@ -914,25 +937,42 @@ cscli metrics show acquisition
 ## Checklist triển khai
 
 ```
+PHẦN 1 — Suricata cơ bản
 [ ] Hardware offloading đã tắt (Interfaces → Settings)
-[ ] Suricata bật PCAP mode, IPS mode BỎ TICK
-[ ] Suricata sniff đúng LAN interface (không phải WAN)
-[ ] Rule sets et/open, abuse.ch đã download
-[ ] Policy: Alert (không Drop) cho web_server, exploit, scan, malware (KHÔNG dùng web_client)
-[ ] EVE JSON logging + XFF config đã bật (conf.d/http-logging.yaml)
-[ ] $HTTP_SERVERS khai báo đúng subnet LAN Zimbra
-[ ] Custom Zimbra rules đã paste và apply (any any, track by_dst, 7 nhóm)
+[ ] Suricata bật PCAP mode, IPS mode BỎ TICK, Block offenders BỎ TICK
+[ ] Sniff đúng LAN interface (interface giữa OPNsense và Zimbra VM)
+[ ] Rule sets et/open, abuse.ch/urlhaus, abuse.ch/feodotracker đã download
+[ ] Policy Alert: emerging-web_server, emerging-exploit, emerging-scan, emerging-malware
+[ ] KHÔNG tạo policy cho emerging-web_client
+
+PHẦN 1.5 — EVE JSON Logging
+[ ] GUI: Enable eve HTTP logging ✅, Eve HTTP extended logging ✅
+[ ] GUI: Eve HTTP dump all headers → "Request" (không phải None)
+[ ] SSH: /usr/local/etc/suricata/conf.d/xff.yaml đã tạo
+[ ] Apply trong GUI → Suricata reload
 [ ] suricata -T không có lỗi cú pháp
-[ ] Kiểm tra EVE JSON có trường http.xff (IP Internet, không phải HAProxy LAN)
-[ ] CrowdSec datasource suricata.yaml đã tạo
+[ ] Verify EVE JSON có http.xff = IP Internet (không phải HAProxy LAN)
+
+PHẦN 2 — Custom Rules
+[ ] Custom Zimbra rules đã paste (7 nhóm, any any -> $HTTP_SERVERS 80)
+[ ] threshold dùng track by_dst (không phải by_src)
+[ ] Apply → kiểm tra rule count
+
+PHẦN 3 — CrowdSec
+[ ] acquis.d/suricata.yaml đã tạo
 [ ] crowdsecurity/suricata collection đã cài
-[ ] 3 Zimbra scenarios đã tạo: zimbra-http-attack, zimbra-bruteforce, zimbra-critical
-[ ] IP HAProxy đã khai báo trong filter scenarios (safety net tránh ban nhầm)
-[ ] service crowdsec reload đã chạy
+[ ] 3 scenarios đã tạo: zimbra-http-attack, zimbra-bruteforce, zimbra-critical
+[ ] IP HAProxy đã khai báo trong filter scenarios (safety net)
+[ ] service crowdsec reload
 [ ] cscli metrics show acquisition → Lines parsed > 0
-[ ] cscli alerts list → source_ip là IP Internet (không phải LAN HAProxy)
-[ ] Test end-to-end: curl sqlmap UA qua HTTPS → alert → CrowdSec ban IP Internet
-[ ] Block offenders trong OPNsense GUI: BỎ TICK (CrowdSec xử lý)
+[ ] cscli alerts list → source_ip là IP Internet
+
+KIỂM TRA END-TO-END
+[ ] curl -A "sqlmap/1.6" https://mail.domain.com/zimbra/ → Suricata alert
+[ ] EVE JSON: http.xff = IP máy test (Internet IP)
+[ ] CrowdSec alert: source_ip = IP máy test
+[ ] cscli decisions list → IP máy test bị ban
+[ ] Truy cập từ IP máy test bị block tại WAN firewall
 ```
 
 ---
@@ -943,6 +983,7 @@ cscli metrics show acquisition
 |---|---|
 | Suricata HTTP Keywords | https://docs.suricata.io/en/latest/rules/http-keywords.html |
 | Suricata EVE JSON | https://docs.suricata.io/en/latest/output/eve/eve-json-format.html |
+| Suricata XFF Config | https://docs.suricata.io/en/latest/configuration/suricata-yaml.html#x-forwarded-for |
 | CrowdSec Scenario Reference | https://docs.crowdsec.net/docs/scenarios/format |
 | CrowdSec Acquisition | https://docs.crowdsec.net/docs/data_sources/file |
 | OPNsense IDS Manual | https://docs.opnsense.org/manual/ips.html |

@@ -1,0 +1,335 @@
+apiVersion: v1beta2
+policies:
+    default:
+        mode: detect-learn
+        threatPreventionPractices: [zimbra-webmail-practice]
+        accessControlPractices: [zimbra-rate-limit-practice]
+        customResponses: zimbra-block-response
+        triggers: [zimbra-log-trigger]
+        sourceIdentifiers: zimbra-xff-identifier # << QUAN TRONG: dung XFF
+        trustedSources: zimbra-trusted-internal
+        exceptions:
+            - zimbra-soap-bypass
+            - zimbra-upload-bypass
+            - zimbra-preauth-relax
+
+    specificRules:
+        - host: "mail.noreply.io.vn"
+          mode: detect-learn
+          threatPreventionPractices: [zimbra-webmail-practice]
+          accessControlPractices: [zimbra-rate-limit-practice]
+          triggers: [zimbra-log-trigger]
+          customResponses: zimbra-block-response
+
+sourcesIdentifiers:
+    - name: zimbra-xff-identifier
+      sourcesIdentifiers:
+          - identifier: x-forwarded-for
+            value:
+                - "192.168.0.73/32"
+          - identifier: sourceip
+            value:
+                - "0.0.0.0/0"
+
+trustedSources:
+    - name: zimbra-trusted-internal
+      minNumOfSources: 3
+      sourcesIdentifiers:
+          - "192.168.0.0/24"
+threatPreventionPractices:
+    - name: zimbra-webmail-practice
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: inherited
+          minimumConfidence: high
+          maxUrlSizeBytes: 32768
+          maxObjectDepth: 40
+          maxBodySizeKb: 102400
+          maxHeaderSizeBytes: 102400
+          protections:
+              csrfProtection: inherited
+              errorDisclosure: inherited
+              openRedirect: inherited
+              nonValidHttpMethods: false
+      intrusionPrevention:
+          overrideMode: inherited
+          maxPerformanceImpact: medium
+          minSeverityLevel: medium
+          minCveYear: 2018
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          overrideMode: inherited
+          minSeverityLevel: medium
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+          archiveInspection:
+              extractArchiveFiles: true
+              scanMaxFileSize: 25
+              scanMaxFileSizeUnit: MB
+              archivedFilesWithinArchivedFiles: detect
+              archivedFilesWhereContentExtractionFailed: detect
+          largeFileInspection:
+              fileSizeLimit: 50
+              fileSizeLimitUnit: MB
+              filesExceedingSizeLimitAction: inherited
+          unnamedFilesAction: inherited
+          threatEmulationEnabled: false
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      schemaValidation:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      antiBot:
+          overrideMode: inherited
+          injectedUris: []
+          validatedUris: []
+
+    - name: zimbra-soap-practice
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: inherited
+          minimumConfidence: critical
+          maxUrlSizeBytes: 65536
+          maxObjectDepth: 100
+          maxBodySizeKb: 204800
+          maxHeaderSizeBytes: 204800
+          protections:
+              csrfProtection: inactive
+              errorDisclosure: inherited
+              openRedirect: inactive
+              nonValidHttpMethods: false
+      intrusionPrevention:
+          overrideMode: inherited
+          maxPerformanceImpact: medium
+          minSeverityLevel: high
+          minCveYear: 2018
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: detect
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          overrideMode: inactive
+          minSeverityLevel: medium
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      schemaValidation:
+          overrideMode: inactive
+          configmap: []
+          files: []
+      antiBot:
+          overrideMode: inactive
+          injectedUris: []
+          validatedUris: []
+
+    - name: zimbra-admin-practice
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: prevent-learn
+          minimumConfidence: medium
+          maxUrlSizeBytes: 32768
+          maxObjectDepth: 40
+          maxBodySizeKb: 51200
+          maxHeaderSizeBytes: 102400
+          protections:
+              csrfProtection: prevent-learn
+              errorDisclosure: prevent-learn
+              openRedirect: prevent-learn
+              nonValidHttpMethods: true
+      intrusionPrevention:
+          overrideMode: inherited
+          maxPerformanceImpact: high
+          minSeverityLevel: low
+          minCveYear: 2015
+          highConfidenceEventAction: prevent
+          mediumConfidenceEventAction: prevent
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          overrideMode: inherited
+          minSeverityLevel: low
+          highConfidenceEventAction: prevent
+          mediumConfidenceEventAction: prevent
+          lowConfidenceEventAction: detect
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      schemaValidation:
+          overrideMode: inactive
+          configmap: []
+          files: []
+      antiBot:
+          overrideMode: inherited
+          injectedUris:
+              - uri: "/zimbraAdmin/"
+          validatedUris: []
+
+    - name: zimbra-public-practice
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: inherited
+          minimumConfidence: medium
+          maxUrlSizeBytes: 16384
+          maxObjectDepth: 40
+          maxBodySizeKb: 10240
+          maxHeaderSizeBytes: 32768
+          protections:
+              csrfProtection: inherited
+              errorDisclosure: inherited
+              openRedirect: prevent-learn
+              nonValidHttpMethods: false
+      intrusionPrevention:
+          overrideMode: inherited
+          maxPerformanceImpact: medium
+          minSeverityLevel: low
+          minCveYear: 2020
+          highConfidenceEventAction: prevent
+          mediumConfidenceEventAction: detect
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          overrideMode: inherited
+          minSeverityLevel: medium
+          highConfidenceEventAction: prevent
+          mediumConfidenceEventAction: detect
+          lowConfidenceEventAction: detect
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      schemaValidation:
+          overrideMode: inactive
+          configmap: []
+          files: []
+      antiBot:
+          overrideMode: inactive
+          injectedUris: []
+          validatedUris: []
+
+    - name: zimbra-dav-practice
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: inherited
+          minimumConfidence: high
+          maxUrlSizeBytes: 32768
+          maxObjectDepth: 100
+          maxBodySizeKb: 102400
+          maxHeaderSizeBytes: 102400
+          protections:
+              csrfProtection: inactive
+              errorDisclosure: inherited
+              openRedirect: inactive
+              nonValidHttpMethods: false
+      intrusionPrevention:
+          overrideMode: inherited
+          maxPerformanceImpact: medium
+          minSeverityLevel: medium
+          minCveYear: 2018
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: detect
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          overrideMode: inherited
+          minSeverityLevel: medium
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      schemaValidation:
+          overrideMode: inactive
+          configmap: []
+          files: []
+      antiBot:
+          overrideMode: inactive
+          injectedUris: []
+          validatedUris: []
+accessControlPractices:
+    - name: zimbra-rate-limit-practice
+      practiceMode: inherited
+      rateLimit:
+          overrideMode: inherited
+          rules:
+              - uri: "/zimbraAdmin/"
+                limit: 10
+                unit: minute
+                comment: "Admin login - chong brute force"
+              - uri: "/service/soap"
+                limit: 600
+                unit: minute
+                comment: "SOAP normal usage ~10 req/sec"
+              - uri: "/service/preauth"
+                limit: 30
+                unit: minute
+                comment: "PreAuth/CAS - chong replay token"
+              - uri: "/public/"
+                limit: 60
+                unit: minute
+                comment: "Public resources - chong abuse"
+logTriggers:
+    - name: zimbra-log-trigger
+      accessControlLogging:
+          allowEvents: true
+          dropEvents: true
+      appsecLogging:
+          detectEvents: true
+          preventEvents: true
+          allWebRequests: true
+      extendedLogging:
+          urlPath: true
+          urlQuery: true
+          httpHeaders: true
+          requestBody: false
+      additionalSuspiciousEventsLogging:
+          enabled: true
+          minSeverity: high
+          responseBody: false
+          responseCode: true
+      logDestination:
+          cloud: false
+          logToAgent: true
+          stdout:
+              format: json
+
+# ---------------------------------------------------------------------
+# 7. EXCEPTIONS
+# ---------------------------------------------------------------------
+exceptions:
+    - name: zimbra-soap-bypass
+      action: accept
+      condition:
+          - key: url
+            value: "/service/soap"
+          - key: sourceIp
+            value: "192.168.0.0/24"
+
+    - name: zimbra-upload-bypass
+      action: accept
+      condition:
+          - key: url
+            value: "/service/upload"
+
+    - name: zimbra-preauth-relax
+      action: suppressLog
+      condition:
+          - key: url
+            value: "/service/preauth"
+
+customResponses:
+    - name: zimbra-block-response
+      mode: response-code-only
+      httpResponseCode: 403
+
+    - name: zimbra-admin-block-response
+      mode: block-page
+      httpResponseCode: 403

@@ -14,62 +14,48 @@ apiVersion: v1beta2
 # để machine learning học riêng cho mỗi asset và áp dụng mode khác nhau.
 # Ref: https://docs.openappsec.io/getting-started/start-with-linux/configuration-using-local-policy-file-linux
 policies:
-  default:
-    # Bắt đầu detect-learn để ML engine học traffic patterns bình thường
-    # Chuyển sang prevent-learn sau khi review logs đủ confidence
-    mode: detect-learn
-    threatPreventionPractices: [zimbra-threat-prevention]
-    accessControlPractices: [zimbra-access-control]
-    customResponse: zimbra-block-response
-    triggers: [zimbra-log-trigger]
-    sourceIdentifiers: zimbra-source-identifier
-    trustedSources: zimbra-trusted-sources
-    exceptions:
-      - zimbra-internal-exception
-      - zimbra-haproxy-healthcheck
+    default:
+        # Bắt đầu detect-learn để ML engine học traffic patterns bình thường
+        # Chuyển sang prevent-learn sau khi review logs đủ confidence
+        mode: detect-learn
+        threatPreventionPractices: [zimbra-threat-prevention]
+        accessControlPractices: [zimbra-access-control]
+        customResponse: zimbra-block-response
+        triggers: [zimbra-log-trigger]
+        sourceIdentifiers: zimbra-source-identifier
+        trustedSources: zimbra-trusted-sources
+        exceptions:
+            - zimbra-internal-exception
+            - zimbra-haproxy-healthcheck
 
-  specificRules:
-    # === Zimbra Webmail (giao diện chính cho end-user) ===
-    - host: "mail.example.com"
-      name: zimbra-webmail
-      mode: detect-learn
-      threatPreventionPractices: [zimbra-threat-prevention]
-      accessControlPractices: [zimbra-webmail-rate-limit]
-      customResponse: zimbra-block-response
-      triggers: [zimbra-log-trigger]
-      sourceIdentifiers: zimbra-source-identifier
-      trustedSources: zimbra-trusted-sources
-      exceptions:
-        - zimbra-internal-exception
-        - zimbra-haproxy-healthcheck
+    specificRules:
+        # === Zimbra Webmail (giao diện chính cho end-user) ===
+        - host: "mail.noreply.io.vn"
+          name: zimbra-webmail
+          mode: detect-learn
+          threatPreventionPractices: [zimbra-threat-prevention]
+          accessControlPractices: [zimbra-webmail-rate-limit]
+          customResponse: zimbra-block-response
+          triggers: [zimbra-log-trigger]
+          sourceIdentifiers: zimbra-source-identifier
+          trustedSources: zimbra-trusted-sources
+          exceptions:
+              - zimbra-internal-exception
+              - zimbra-haproxy-healthcheck
 
-    # === Zimbra Admin Console (chỉ cho admin, bảo mật cao hơn) ===
-    - host: "mail.example.com/zimbraAdmin"
-      name: zimbra-admin-console
-      mode: detect-learn
-      threatPreventionPractices: [zimbra-threat-prevention-strict]
-      accessControlPractices: [zimbra-admin-rate-limit]
-      customResponse: zimbra-block-response
-      triggers: [zimbra-admin-log-trigger]
-      sourceIdentifiers: zimbra-source-identifier
-      trustedSources: zimbra-trusted-sources
-      exceptions:
-        - zimbra-internal-exception
-    
         # === Zimbra Admin Console (chỉ cho admin, bảo mật cao hơn) ===
-    - host: "mail.example.com/zimbraAdmin"
-      name: zimbra-admin-console
-      mode: detect-learn
-      threatPreventionPractices: [zimbra-threat-prevention-strict]
-      accessControlPractices: [zimbra-admin-rate-limit]
-      customResponse: zimbra-block-response
-      triggers: [zimbra-admin-log-trigger]
-      sourceIdentifiers: zimbra-source-identifier
-      trustedSources: zimbra-trusted-sources
-      exceptions:
-        - zimbra-internal-exception
+        - host: "mail.noreply.io.vn/zimbraAdmin"
+          name: zimbra-admin-console
+          mode: detect-learn
+          threatPreventionPractices: [zimbra-threat-prevention-strict]
+          accessControlPractices: [zimbra-admin-rate-limit]
+          customResponse: zimbra-block-response
+          triggers: [zimbra-admin-log-trigger]
+          sourceIdentifiers: zimbra-source-identifier
+          trustedSources: zimbra-trusted-sources
+          exceptions:
+              - zimbra-internal-exception
 
-    
 # =============================================================================
 # THREAT PREVENTION PRACTICES
 # =============================================================================
@@ -77,110 +63,110 @@ policies:
 # Khi policy chuyển sang prevent-learn, tất cả engine cũng tự chuyển theo
 # Ref: https://docs.openappsec.io/getting-started/start-with-linux/local-policy-file-v1beta2-beta
 threatPreventionPractices:
-  # --- Practice tiêu chuẩn cho webmail/API ---
-  - name: zimbra-threat-prevention
-    practiceMode: inherited
-    webAttacks:
-      overrideMode: inherited
-      minimumConfidence: high
-      # Tuning cho Zimbra: tăng giới hạn phù hợp email attachments và rich content
-      maxBodySizeKb: 51200
-      # 50MB - phù hợp cho email với attachments lớn qua webmail
-      maxUrlSizeBytes: 32768
-      # 32KB - giữ mặc định, đủ cho Zimbra URLs
-      maxObjectDepth: 40
-      # Giữ mặc định
-      maxHeaderSizeBytes: 102400
-      # 100KB - giữ mặc định, đủ cho cookie/auth headers
-      protections:
-        # Bật CSRF protection ở chế độ detect cho Zimbra webmail
-        # Zimbra có CSRF token riêng nhưng thêm lớp bảo vệ bổ sung
-        csrfProtection: detect
-        # Detect error disclosure - ngăn lộ thông tin server qua error messages
-        errorDisclosure: detect
-        # Detect open redirect - Zimbra có nhiều redirect flows
-        openRedirect: detect
-        # Chặn non-standard HTTP methods (Zimbra chỉ cần GET/POST/OPTIONS)
-        nonValidHttpMethods: true
-    intrusionPrevention:
-      # IPS - yêu cầu Premium Edition
-      overrideMode: inherited
-      maxPerformanceImpact: medium
-      minSeverityLevel: medium
-      # CVE từ 2020 trở đi - Zimbra có nhiều CVE nghiêm trọng gần đây
-      # (CVE-2022-27925, CVE-2022-41352, CVE-2023-37580, v.v.)
-      minCveYear: 2020
-      highConfidenceEventAction: inherited
-      mediumConfidenceEventAction: inherited
-      lowConfidenceEventAction: detect
-    fileSecurity:
-      # File Security - yêu cầu Premium Edition
-      overrideMode: inherited
-      minSeverityLevel: medium
-      highConfidenceEventAction: inherited
-      mediumConfidenceEventAction: inherited
-      lowConfidenceEventAction: detect
-    snortSignatures:
-      overrideMode: inherited
-      configmap: []
-      files: []
-      # Có thể thêm custom Snort rules cho Zimbra-specific patterns sau
-    schemaValidation:
-      # Schema Validation - yêu cầu Premium Edition
-      overrideMode: inherited
-      configmap: []
-      files: []
-    antiBot:
-      # AntiBot - yêu cầu Premium Edition
-      # Khi có Premium, nên bật để chống automated attacks vào webmail login
-      overrideMode: inherited
-      injectedUris: []
-      validatedUris: []
+    # --- Practice tiêu chuẩn cho webmail/API ---
+    - name: zimbra-threat-prevention
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: inherited
+          minimumConfidence: high
+          # Tuning cho Zimbra: tăng giới hạn phù hợp email attachments và rich content
+          maxBodySizeKb: 51200
+          # 50MB - phù hợp cho email với attachments lớn qua webmail
+          maxUrlSizeBytes: 32768
+          # 32KB - giữ mặc định, đủ cho Zimbra URLs
+          maxObjectDepth: 40
+          # Giữ mặc định
+          maxHeaderSizeBytes: 102400
+          # 100KB - giữ mặc định, đủ cho cookie/auth headers
+          protections:
+              # Bật CSRF protection ở chế độ detect cho Zimbra webmail
+              # Zimbra có CSRF token riêng nhưng thêm lớp bảo vệ bổ sung
+              csrfProtection: detect
+              # Detect error disclosure - ngăn lộ thông tin server qua error messages
+              errorDisclosure: detect
+              # Detect open redirect - Zimbra có nhiều redirect flows
+              openRedirect: detect
+              # Chặn non-standard HTTP methods (Zimbra chỉ cần GET/POST/OPTIONS)
+              nonValidHttpMethods: true
+      intrusionPrevention:
+          # IPS - yêu cầu Premium Edition
+          overrideMode: inherited
+          maxPerformanceImpact: medium
+          minSeverityLevel: medium
+          # CVE từ 2020 trở đi - Zimbra có nhiều CVE nghiêm trọng gần đây
+          # (CVE-2022-27925, CVE-2022-41352, CVE-2023-37580, v.v.)
+          minCveYear: 2020
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          # File Security - yêu cầu Premium Edition
+          overrideMode: inherited
+          minSeverityLevel: medium
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+          # Có thể thêm custom Snort rules cho Zimbra-specific patterns sau
+      schemaValidation:
+          # Schema Validation - yêu cầu Premium Edition
+          overrideMode: inherited
+          configmap: []
+          files: []
+      antiBot:
+          # AntiBot - yêu cầu Premium Edition
+          # Khi có Premium, nên bật để chống automated attacks vào webmail login
+          overrideMode: inherited
+          injectedUris: []
+          validatedUris: []
 
-  # --- Practice nghiêm ngặt hơn cho Admin Console ---
-  - name: zimbra-threat-prevention-strict
-    practiceMode: inherited
-    webAttacks:
-      overrideMode: inherited
-      # Medium confidence = detect nhiều attack hơn, phù hợp cho admin console
-      minimumConfidence: medium
-      maxBodySizeKb: 10240
-      # 10MB - admin console không cần upload lớn
-      maxUrlSizeBytes: 16384
-      maxObjectDepth: 20
-      maxHeaderSizeBytes: 65536
-      protections:
-        csrfProtection: detect
-        errorDisclosure: detect
-        openRedirect: detect
-        nonValidHttpMethods: true
-    intrusionPrevention:
-      overrideMode: inherited
-      maxPerformanceImpact: medium
-      minSeverityLevel: low
-      # Severity thấp hơn = detect nhiều CVE hơn cho admin interface
-      minCveYear: 2020
-      highConfidenceEventAction: inherited
-      mediumConfidenceEventAction: inherited
-      lowConfidenceEventAction: detect
-    fileSecurity:
-      overrideMode: inherited
-      minSeverityLevel: low
-      highConfidenceEventAction: inherited
-      mediumConfidenceEventAction: inherited
-      lowConfidenceEventAction: detect
-    snortSignatures:
-      overrideMode: inherited
-      configmap: []
-      files: []
-    schemaValidation:
-      overrideMode: inherited
-      configmap: []
-      files: []
-    antiBot:
-      overrideMode: inherited
-      injectedUris: []
-      validatedUris: []
+    # --- Practice nghiêm ngặt hơn cho Admin Console ---
+    - name: zimbra-threat-prevention-strict
+      practiceMode: inherited
+      webAttacks:
+          overrideMode: inherited
+          # Medium confidence = detect nhiều attack hơn, phù hợp cho admin console
+          minimumConfidence: medium
+          maxBodySizeKb: 10240
+          # 10MB - admin console không cần upload lớn
+          maxUrlSizeBytes: 16384
+          maxObjectDepth: 20
+          maxHeaderSizeBytes: 65536
+          protections:
+              csrfProtection: detect
+              errorDisclosure: detect
+              openRedirect: detect
+              nonValidHttpMethods: true
+      intrusionPrevention:
+          overrideMode: inherited
+          maxPerformanceImpact: medium
+          minSeverityLevel: low
+          # Severity thấp hơn = detect nhiều CVE hơn cho admin interface
+          minCveYear: 2020
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      fileSecurity:
+          overrideMode: inherited
+          minSeverityLevel: low
+          highConfidenceEventAction: inherited
+          mediumConfidenceEventAction: inherited
+          lowConfidenceEventAction: detect
+      snortSignatures:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      schemaValidation:
+          overrideMode: inherited
+          configmap: []
+          files: []
+      antiBot:
+          overrideMode: inherited
+          injectedUris: []
+          validatedUris: []
 
 # =============================================================================
 # ACCESS CONTROL PRACTICES - Rate Limiting
@@ -188,160 +174,160 @@ threatPreventionPractices:
 # Rate limiting bổ sung cho CrowdSec (L3/4) - OpenAppSec xử lý ở L7
 # Ref: https://docs.openappsec.io/getting-started/start-with-linux/local-policy-file-v1beta2-beta
 accessControlPractices:
-  # --- Rate limit mặc định ---
-  - name: zimbra-access-control
-    practiceMode: inherited
-    rateLimit:
-      overrideMode: inherited
-      rules: []
+    # --- Rate limit mặc định ---
+    - name: zimbra-access-control
+      practiceMode: inherited
+      rateLimit:
+          overrideMode: inherited
+          rules: []
 
-  # --- Rate limit cho Webmail ---
-  - name: zimbra-webmail-rate-limit
-    practiceMode: inherited
-    rateLimit:
-      overrideMode: prevent
-      rules:
-        # Giới hạn tổng request webmail: 300 req/phút per source
-        - uri: "/"
-          limit: 300
-          unit: minute
-          triggers: [zimbra-log-trigger]
-          comment: "General webmail rate limit per source"
-        # Giới hạn login: 10 req/phút để chống brute-force
-        - uri: "/service/soap/AuthRequest"
-          limit: 10
-          unit: minute
-          triggers: [zimbra-log-trigger]
-          comment: "Login brute-force protection"
+    # --- Rate limit cho Webmail ---
+    - name: zimbra-webmail-rate-limit
+      practiceMode: inherited
+      rateLimit:
+          overrideMode: prevent
+          rules:
+              # Giới hạn tổng request webmail: 300 req/phút per source
+              - uri: "/"
+                limit: 300
+                unit: minute
+                triggers: [zimbra-log-trigger]
+                comment: "General webmail rate limit per source"
+              # Giới hạn login: 10 req/phút để chống brute-force
+              - uri: "/service/soap/AuthRequest"
+                limit: 10
+                unit: minute
+                triggers: [zimbra-log-trigger]
+                comment: "Login brute-force protection"
 
-  # --- Rate limit cho Admin Console (nghiêm ngặt hơn) ---
-  - name: zimbra-admin-rate-limit
-    practiceMode: inherited
-    rateLimit:
-      overrideMode: prevent
-      rules:
-        # Admin console: 60 req/phút
-        - uri: "/"
-          limit: 60
-          unit: minute
-          triggers: [zimbra-admin-log-trigger]
-          comment: "Admin console rate limit"
-        # Admin login: 5 req/phút
-        - uri: "/service/admin/soap/AuthRequest"
-          limit: 5
-          unit: minute
-          triggers: [zimbra-admin-log-trigger]
-          comment: "Admin login brute-force protection"
+    # --- Rate limit cho Admin Console (nghiêm ngặt hơn) ---
+    - name: zimbra-admin-rate-limit
+      practiceMode: inherited
+      rateLimit:
+          overrideMode: prevent
+          rules:
+              # Admin console: 60 req/phút
+              - uri: "/"
+                limit: 60
+                unit: minute
+                triggers: [zimbra-admin-log-trigger]
+                comment: "Admin console rate limit"
+              # Admin login: 5 req/phút
+              - uri: "/service/admin/soap/AuthRequest"
+                limit: 5
+                unit: minute
+                triggers: [zimbra-admin-log-trigger]
+                comment: "Admin login brute-force protection"
 
-  # --- Rate limit cho API ---
-  - name: zimbra-api-rate-limit
-    practiceMode: inherited
-    rateLimit:
-      overrideMode: prevent
-      rules:
-        # SOAP/REST API: 200 req/phút per source
-        - uri: "/"
-          limit: 200
-          unit: minute
-          triggers: [zimbra-log-trigger]
-          comment: "API rate limit per source"
+    # --- Rate limit cho API ---
+    - name: zimbra-api-rate-limit
+      practiceMode: inherited
+      rateLimit:
+          overrideMode: prevent
+          rules:
+              # SOAP/REST API: 200 req/phút per source
+              - uri: "/"
+                limit: 200
+                unit: minute
+                triggers: [zimbra-log-trigger]
+                comment: "API rate limit per source"
 
-  # --- Rate limit cho ActiveSync ---
-  - name: zimbra-activesync-rate-limit
-    practiceMode: inherited
-    rateLimit:
-      overrideMode: prevent
-      rules:
-        # ActiveSync: 120 req/phút per source
-        # ActiveSync sử dụng long-polling nên limit hợp lý
-        - uri: "/"
-          limit: 120
-          unit: minute
-          triggers: [zimbra-log-trigger]
-          comment: "ActiveSync rate limit per source"
+    # --- Rate limit cho ActiveSync ---
+    - name: zimbra-activesync-rate-limit
+      practiceMode: inherited
+      rateLimit:
+          overrideMode: prevent
+          rules:
+              # ActiveSync: 120 req/phút per source
+              # ActiveSync sử dụng long-polling nên limit hợp lý
+              - uri: "/"
+                limit: 120
+                unit: minute
+                triggers: [zimbra-log-trigger]
+                comment: "ActiveSync rate limit per source"
 
 # =============================================================================
 # CUSTOM RESPONSES
 # =============================================================================
 customResponses:
-  - name: zimbra-block-response
-    mode: response-code-only
-    httpResponseCode: 403
-    # Chỉ trả response code, không hiển thị block page
-    # Tránh tiết lộ WAF fingerprint cho attacker
-    # Nếu muốn block page tùy chỉnh, chuyển mode sang block-page:
-    # mode: block-page
-    # httpResponseCode: 403
-    # messageTitle: "Access Denied"
-    # messageBody: "<h1>Access Denied</h1><p>Your request has been blocked.</p>"
+    - name: zimbra-block-response
+      mode: response-code-only
+      httpResponseCode: 403
+      # Chỉ trả response code, không hiển thị block page
+      # Tránh tiết lộ WAF fingerprint cho attacker
+      # Nếu muốn block page tùy chỉnh, chuyển mode sang block-page:
+      # mode: block-page
+      # httpResponseCode: 403
+      # messageTitle: "Access Denied"
+      # messageBody: "<h1>Access Denied</h1><p>Your request has been blocked.</p>"
 
 # =============================================================================
 # LOG TRIGGERS
 # =============================================================================
 # Logging phục vụ giám sát, troubleshooting, và feed cho CrowdSec parser
 logTriggers:
-  # --- Log trigger chính ---
-  - name: zimbra-log-trigger
-    accessControlLogging:
-      allowEvents: false
-      # Không log allow events → giảm noise
-      dropEvents: true
-      # Log các request bị drop bởi rate limit
-    appsecLogging:
-      detectEvents: true
-      preventEvents: true
-      allWebRequests: false
-      # false = chỉ log events, không log mọi request
-      # Bật true tạm thời khi cần debug hoặc tuning ML
-    extendedLogging:
-      urlPath: true
-      urlQuery: true
-      httpHeaders: true
-      # Bật log headers để troubleshoot X-Forwarded-For, Proxy Protocol
-      requestBody: false
-      # Tắt request body logging → tránh log sensitive data (passwords, email content)
-    additionalSuspiciousEventsLogging:
-      enabled: true
-      minSeverity: high
-      responseBody: false
-      # Không log response body → tránh lộ email content trong logs
-      responseCode: true
-    logDestination:
-      cloud: true
-      # Gửi logs lên Check Point Infinity Portal (hybrid mode)
-      logToAgent: true
-      # Log local để CrowdSec parser đọc từ /var/log/nano_agent/
-      stdout:
-        format: json
-        # JSON format cho CrowdSec parser và log aggregation
+    # --- Log trigger chính ---
+    - name: zimbra-log-trigger
+      accessControlLogging:
+          allowEvents: false
+          # Không log allow events → giảm noise
+          dropEvents: true
+          # Log các request bị drop bởi rate limit
+      appsecLogging:
+          detectEvents: true
+          preventEvents: true
+          allWebRequests: false
+          # false = chỉ log events, không log mọi request
+          # Bật true tạm thời khi cần debug hoặc tuning ML
+      extendedLogging:
+          urlPath: true
+          urlQuery: true
+          httpHeaders: true
+          # Bật log headers để troubleshoot X-Forwarded-For, Proxy Protocol
+          requestBody: false
+          # Tắt request body logging → tránh log sensitive data (passwords, email content)
+      additionalSuspiciousEventsLogging:
+          enabled: true
+          minSeverity: high
+          responseBody: false
+          # Không log response body → tránh lộ email content trong logs
+          responseCode: true
+      logDestination:
+          cloud: true
+          # Gửi logs lên Check Point Infinity Portal (hybrid mode)
+          logToAgent: true
+          # Log local để CrowdSec parser đọc từ /var/log/nano_agent/
+          stdout:
+              format: json
+              # JSON format cho CrowdSec parser và log aggregation
 
-  # --- Log trigger riêng cho Admin Console (chi tiết hơn) ---
-  - name: zimbra-admin-log-trigger
-    accessControlLogging:
-      allowEvents: true
-      # Log cả allow events cho admin console → audit trail
-      dropEvents: true
-    appsecLogging:
-      detectEvents: true
-      preventEvents: true
-      allWebRequests: true
-      # Log TẤT CẢ requests đến admin console → full audit
-    extendedLogging:
-      urlPath: true
-      urlQuery: true
-      httpHeaders: true
-      requestBody: false
-      # Vẫn tắt request body → admin credentials
-    additionalSuspiciousEventsLogging:
-      enabled: true
-      minSeverity: high
-      responseBody: false
-      responseCode: true
-    logDestination:
-      cloud: true
-      logToAgent: true
-      stdout:
-        format: json
+    # --- Log trigger riêng cho Admin Console (chi tiết hơn) ---
+    - name: zimbra-admin-log-trigger
+      accessControlLogging:
+          allowEvents: true
+          # Log cả allow events cho admin console → audit trail
+          dropEvents: true
+      appsecLogging:
+          detectEvents: true
+          preventEvents: true
+          allWebRequests: true
+          # Log TẤT CẢ requests đến admin console → full audit
+      extendedLogging:
+          urlPath: true
+          urlQuery: true
+          httpHeaders: true
+          requestBody: false
+          # Vẫn tắt request body → admin credentials
+      additionalSuspiciousEventsLogging:
+          enabled: true
+          minSeverity: high
+          responseBody: false
+          responseCode: true
+      logDestination:
+          cloud: true
+          logToAgent: true
+          stdout:
+              format: json
 
 # =============================================================================
 # EXCEPTIONS
@@ -352,40 +338,40 @@ logTriggers:
 # - Giữa các exception rules là logic OR (implicit)
 # Ref: https://docs.openappsec.io/release-notes
 exceptions:
-  # --- Cho phép traffic nội bộ (HAProxy / OPNsense gateway) ---
-  - name: zimbra-internal-exception
-    action: accept
-    condition:
-      - key: sourceIP
-        value: "192.168.0.73"
-        # IP của OPNsense/HAProxy gateway - traffic đã qua kiểm tra L3/4
+    # --- Cho phép traffic nội bộ (HAProxy / OPNsense gateway) ---
+    - name: zimbra-internal-exception
+      action: accept
+      condition:
+          - key: sourceIP
+            value: "192.168.0.73"
+            # IP của OPNsense/HAProxy gateway - traffic đã qua kiểm tra L3/4
 
-  # --- HAProxy health check bypass ---
-  - name: zimbra-haproxy-healthcheck
-    action: accept
-    condition:
-      - key: url
-        value: "/healthcheck"
-        # URL health check endpoint cho HAProxy backend monitoring
-        # Cần tạo location block tương ứng trong Nginx config
+    # --- HAProxy health check bypass ---
+    - name: zimbra-haproxy-healthcheck
+      action: accept
+      condition:
+          - key: url
+            value: "/healthcheck"
+            # URL health check endpoint cho HAProxy backend monitoring
+            # Cần tạo location block tương ứng trong Nginx config
 
-  # --- Exception cho Zimbra SOAP API patterns ---
-  # Zimbra SOAP requests có thể trigger false positive do XML payload phức tạp
-  - name: zimbra-api-exception
-    action: skip
-    condition:
-      - key: url
-        value: "/service/soap"
-        # skip = bỏ qua kiểm tra cho URL này nhưng vẫn log
-        # Nếu false positive quá nhiều, dùng action: accept thay thế
+    # --- Exception cho Zimbra SOAP API patterns ---
+    # Zimbra SOAP requests có thể trigger false positive do XML payload phức tạp
+    - name: zimbra-api-exception
+      action: skip
+      condition:
+          - key: url
+            value: "/service/soap"
+            # skip = bỏ qua kiểm tra cho URL này nhưng vẫn log
+            # Nếu false positive quá nhiều, dùng action: accept thay thế
 
-  # --- Exception cho ActiveSync ---
-  # ActiveSync sử dụng WBXML encoding có thể bị detect nhầm
-  - name: zimbra-activesync-exception
-    action: skip
-    condition:
-      - key: url
-        value: "/Microsoft-Server-ActiveSync"
+    # --- Exception cho ActiveSync ---
+    # ActiveSync sử dụng WBXML encoding có thể bị detect nhầm
+    - name: zimbra-activesync-exception
+      action: skip
+      condition:
+          - key: url
+            value: "/Microsoft-Server-ActiveSync"
 
 # =============================================================================
 # TRUSTED SOURCES
@@ -394,12 +380,12 @@ exceptions:
 # minNumOfSources: số source tối thiểu gửi cùng pattern để ML học là benign
 # Ref: https://docs.openappsec.io/getting-started/start-with-linux/local-policy-file-v1beta2-beta
 trustedSources:
-  - name: zimbra-trusted-sources
-    minNumOfSources: 1
-    # Đặt 1 vì internal sources ít nhưng đáng tin cậy
-    sourcesIdentifiers:
-      - "192.168.0.73"
-      # OPNsense/HAProxy gateway IP
+    - name: zimbra-trusted-sources
+      minNumOfSources: 1
+      # Đặt 1 vì internal sources ít nhưng đáng tin cậy
+      sourcesIdentifiers:
+          - "192.168.0.73"
+          # OPNsense/HAProxy gateway IP
 
 # =============================================================================
 # SOURCE IDENTIFIERS
@@ -410,10 +396,10 @@ trustedSources:
 # Nginx nhận real IP qua Proxy Protocol rồi set vào X-Forwarded-For header
 # OpenAppSec đọc X-Forwarded-For để xác định source thực tế
 sourcesIdentifiers:
-  - name: zimbra-source-identifier
-    sourcesIdentifiers:
-      - identifier: x-forwarded-for
-        value: []
-        # Mảng rỗng = áp dụng cho tất cả giá trị X-Forwarded-For
-        # Nginx cần được cấu hình set_real_ip_from với IP HAProxy
-        # và proxy_set_header X-Forwarded-For $proxy_protocol_addr
+    - name: zimbra-source-identifier
+      sourcesIdentifiers:
+          - identifier: x-forwarded-for
+            value: []
+            # Mảng rỗng = áp dụng cho tất cả giá trị X-Forwarded-For
+            # Nginx cần được cấu hình set_real_ip_from với IP HAProxy
+            # và proxy_set_header X-Forwarded-For $proxy_protocol_addr
